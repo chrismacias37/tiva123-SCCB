@@ -9,7 +9,7 @@
 
 struct sccbCamContext camera;
 
-uint8_t data;
+uint32_t data;
 volatile int writting=0;
 volatile int reading=0;
 
@@ -52,35 +52,69 @@ void initalizeSCCB(uint32_t gpioBaseClk, uint32_t gpioPinClk, uint32_t gpioBaseD
 
 }
 
-void sccbWrite(uint8_t information)
+void sccbWrite(uint8_t addr, unit8_t reg,uint8_t information)
 {
     writting=1;
-    data=information;
+    data=(addr<<18)+(reg<<9)+information; //Rolling left 9 bits to account for the don't care.
     TimerEnable(TIMER1_BASE, TIMER_A);
     while(writting == 1);
 }
 
 void TimerAInterupt()
 {
-    static unsigned int bitCounter = 0;
+    static int clockCounter = -2;
+    static int bitCounter = 0;
+    static int stop = 0;
 
-    if((bitCounter%2) == 1)
+
+    if(writting == 1 && clockCounter >= 0)
     {
-        //Toggle the clock signal
-        if(bitCounter == 1) GPIOPinWrite(camera.gpioClockPort, camera.gpioClockPin, 1);
-        else GPIOPinWrite(camera.gpioClockPort, camera.gpioClockPin, 0);
+            if((clockCounter%2) == 1)
+            {
+                //Toggle the clock signal
+                if(clockCounter == 1) GPIOPinWrite(camera.gpioClockPort, camera.gpioClockPin, 1);
+                else GPIOPinWrite(camera.gpioClockPort, camera.gpioClockPin, 0);
+            }
+
+            if((clockCounter % 4) == 0)
+            {
+                GPIOPinWrite(camera.gpioClockPort, camera.gpioClockPin, (data>>(26 - bitCounter)) & 0b1);
+                bitCounter++;
+            }
+
+            if(bitCounter==27)
+            {
+                writting=0;
+                stop=1;
+                clockCounter=-2; //Sets to -4 to indicate the start sequence for next transfer
+                bitCounter=0;
+                TimerDisable(TIMER1_BASE, TIMER_A);
+
+            }
+            else
+            {
+                clockCounter++;
+                if(clockCounter == 4) clockCounter = 0;
+            }
     }
 
-    if((bitCounter % 4) == 0)
+    if(reading == 1 && clockCoutner >=0)
     {
-        GPIOPinWrite(camera.gpioClockPort, camera.gpioClockPin, data & 0b1)
-        data<<1;
-    }
-
-    if(writting==1 && bitCounter==27)
-    {
-        writting=0;
 
     }
 
+    if(stop == 1)
+    {
+        //Stop sequence
+    }
+
+    if(clockCounter < 0)
+    {
+        //Start sequence
+        if((clockCounter%2) == -1)
+        {
+            GPIOPinWrite(camera.gpioClockPort, camera.gpioClockPin, 0);
+        }
+        else GPIOPinWrite(camera.gpioDataPort, camera.gpioDataPin, 0)
+    }
 }
