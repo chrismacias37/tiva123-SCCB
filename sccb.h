@@ -19,7 +19,7 @@
 void initalizeSCCB(uint32_t gpioBaseClk, uint32_t gpioPinClk, uint32_t gpioBaseData, uint32_t gpioPinData);
 void TimerAInterupt();
 
-void sccbWrite(uint8_t information);
+void sccbWrite(uint8_t addr, uint8_t reg, uint8_t information);
 //void sccvRead();
 
 
